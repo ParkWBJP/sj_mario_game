@@ -1,0 +1,5 @@
+node_modules/
+output/
+server.log
+.codex-web_game_playwright_client.js
+.codex-action_payloads.json

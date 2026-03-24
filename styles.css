@@ -1,0 +1,290 @@
+:root {
+  --sky-top: #8fddff;
+  --sky-bottom: #fff4c5;
+  --ink: #43344c;
+  --soft-ink: #6d5c74;
+  --shadow: rgba(63, 47, 41, 0.18);
+  --jump-top: #ffcf7a;
+  --jump-bottom: #ff9f5a;
+  --shoot-top: #95e5a6;
+  --shoot-bottom: #5ec778;
+  --ui-top: rgba(255, 255, 255, 0.9);
+  --ui-bottom: rgba(255, 245, 232, 0.92);
+  --outline: #fffef8;
+  --font-cloud: "Comic Sans MS", "Chalkboard SE", "Marker Felt", "Trebuchet MS", cursive;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+  font-family: var(--font-cloud);
+  color: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell,
+.game-frame,
+.canvas-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+.game-frame {
+  position: relative;
+}
+
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.55), transparent 28%),
+    linear-gradient(180deg, #bcecff, #fff3cb);
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.hud-row {
+  position: absolute;
+  inset: 18px 20px auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.hud-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pill,
+.icon-button,
+.hint-card {
+  background: linear-gradient(180deg, var(--ui-top), var(--ui-bottom));
+  border: 4px solid rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px var(--shadow);
+}
+
+.cloud-pill,
+.cloud-button,
+.cloud-badge {
+  font-family: var(--font-cloud);
+  text-shadow:
+    -2px -2px 0 rgba(255, 255, 255, 0.94),
+    2px -2px 0 rgba(255, 255, 255, 0.94),
+    -2px 2px 0 rgba(255, 255, 255, 0.94),
+    2px 2px 0 rgba(255, 255, 255, 0.94);
+}
+
+.pill {
+  min-height: 56px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 900;
+  pointer-events: auto;
+}
+
+.icon-button {
+  min-height: 54px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border-width: 4px;
+  cursor: pointer;
+  font-size: clamp(0.95rem, 1.8vw, 1.08rem);
+  font-weight: 900;
+  color: var(--ink);
+  pointer-events: auto;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 4;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 245, 223, 0.32));
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-card {
+  width: min(92vw, 760px);
+  padding: 30px 28px 26px;
+  border-radius: 36px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255, 252, 244, 0.96), rgba(255, 245, 229, 0.96));
+  border: 5px solid rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 42px rgba(77, 61, 45, 0.18);
+}
+
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff5be, #ffe68a);
+  color: #926200;
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  font-weight: 900;
+}
+
+.cloud-title {
+  margin: 14px 0 12px;
+  font-family: var(--font-cloud);
+  font-size: clamp(2rem, 5vw, 3.6rem);
+  line-height: 1.1;
+  color: #49364d;
+  text-shadow:
+    -4px -4px 0 rgba(255, 255, 255, 0.97),
+    4px -4px 0 rgba(255, 255, 255, 0.97),
+    -4px 4px 0 rgba(255, 255, 255, 0.97),
+    4px 4px 0 rgba(255, 255, 255, 0.97),
+    0 10px 18px rgba(95, 76, 72, 0.12);
+}
+
+.cloud-copy {
+  margin: 0;
+  font-size: clamp(1rem, 2.2vw, 1.45rem);
+  line-height: 1.5;
+  color: var(--soft-ink);
+  font-weight: 900;
+}
+
+.hint-grid {
+  margin: 24px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hint-card {
+  border-radius: 24px;
+  padding: 18px 14px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  font-size: clamp(0.95rem, 1.8vw, 1.1rem);
+  font-weight: 900;
+}
+
+.hint-icon {
+  font-size: 1.8rem;
+}
+
+.primary-button,
+.control-button {
+  border: 0;
+  border-radius: 30px;
+  color: #ffffff;
+  font-family: var(--font-cloud);
+  font-weight: 900;
+  text-shadow:
+    -2px -2px 0 rgba(0, 0, 0, 0.08),
+    2px 2px 0 rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(86, 64, 39, 0.22);
+}
+
+.primary-button {
+  min-height: 76px;
+  width: min(100%, 320px);
+  background: linear-gradient(180deg, #ffc86a, #ff9959);
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+}
+
+.game-controls {
+  position: absolute;
+  inset: auto 20px 24px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.control-button {
+  min-width: min(34vw, 290px);
+  min-height: 94px;
+  padding: 18px 24px;
+  font-size: clamp(1.5rem, 3.2vw, 2.2rem);
+  pointer-events: auto;
+}
+
+.jump-button {
+  background: linear-gradient(180deg, var(--jump-top), var(--jump-bottom));
+}
+
+.shoot-button {
+  background: linear-gradient(180deg, var(--shoot-top), var(--shoot-bottom));
+}
+
+button:focus-visible {
+  outline: 4px solid rgba(92, 147, 255, 0.62);
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .hud-row {
+    inset: 14px 14px auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hud-actions {
+    justify-content: stretch;
+  }
+
+  .hud-actions > * {
+    flex: 1;
+  }
+
+  .overlay-card {
+    width: min(94vw, 680px);
+    padding: 24px 18px 20px;
+  }
+
+  .hint-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .game-controls {
+    inset: auto 14px 16px;
+    gap: 14px;
+  }
+
+  .control-button {
+    min-width: 0;
+    width: 100%;
+    min-height: 84px;
+    font-size: clamp(1.35rem, 4vw, 1.8rem);
+  }
+}

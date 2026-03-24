@@ -1,0 +1,858 @@
+import { AudioManager } from "./AudioManager.js";
+import { AssetLibrary } from "./AssetLibrary.js";
+import {
+  CAMERA_LEAD,
+  GAME_DURATION_SECONDS,
+  GRAVITY,
+  GROUND_Y,
+  JUMP_VELOCITY,
+  PLAYER_HEIGHT,
+  RUN_SPEED,
+  STEP_UP_HEIGHT,
+  VIEWPORT_HEIGHT,
+  VIEWPORT_WIDTH
+} from "./constants.js";
+import { Enemy } from "./entities/Enemy.js";
+import { Player } from "./entities/Player.js";
+import { Projectile } from "./entities/Projectile.js";
+import { createLevel } from "./level.js";
+import { clamp, formatTime, rangeOverlap, rectsIntersect } from "./math.js";
+
+const OVERLAY_COPY = {
+  start: {
+    badge: "서준 서진이 전용",
+    title: "서준 서진이를 위한 마리오 게임",
+    text: "점프로 폴짝, 발사로 팡팡. 구덩이와 몬스터를 넘어 3분 동안 달려요.",
+    button: "시작하기"
+  },
+  fail: {
+    badge: "다시 한번",
+    title: "앗, 다시 달려볼까요?",
+    text: "조금만 더 폴짝 뛰면 금방 성공할 수 있어요.",
+    button: "다시 시작"
+  },
+  complete: {
+    badge: "게임 완료",
+    title: "서준이와 서진이가 멋지게 성공했어요",
+    text: "3분 동안 씩씩하게 달렸어요. 버튼을 누르면 처음부터 다시 놀아요.",
+    button: "다시 시작"
+  }
+};
+
+export class Game {
+  constructor(canvas, ui) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.ui = ui;
+    this.assets = new AssetLibrary();
+    this.audio = new AudioManager();
+    this.mode = "start";
+    this.level = createLevel();
+    this.player = new Player();
+    this.enemies = this.level.enemies.map((enemy) => new Enemy(enemy));
+    this.projectiles = [];
+    this.cameraX = 0;
+    this.timeRemaining = GAME_DURATION_SECONDS;
+    this.lastFrameTime = 0;
+    this.fixedStep = 1 / 60;
+    this.cloudOffset = 0;
+    this.pendingShoot = false;
+    this.setupPlayerOnGround();
+    this.updateHud();
+    this.assets.preload().then(() => this.render());
+  }
+
+  setupPlayerOnGround() {
+    this.player.y = GROUND_Y - PLAYER_HEIGHT;
+    this.player.onGround = true;
+  }
+
+  bindInput() {
+    const pressJump = (event) => {
+      event?.preventDefault?.();
+      this.requestJump();
+    };
+    const pressShoot = (event) => {
+      event?.preventDefault?.();
+      this.requestShoot();
+    };
+
+    window.addEventListener("keydown", (event) => {
+      if (event.repeat) {
+        return;
+      }
+      if (event.code === "Space" || event.code === "ArrowUp" || event.code === "KeyW") {
+        pressJump(event);
+      } else if (event.code === "KeyB" || event.code === "Enter" || event.code === "KeyX") {
+        pressShoot(event);
+      } else if (event.key.toLowerCase() === "f") {
+        this.toggleFullscreen();
+      }
+    });
+
+    this.ui.jumpButton.addEventListener("pointerdown", pressJump);
+    this.ui.shootButton.addEventListener("pointerdown", pressShoot);
+    this.ui.startButton.addEventListener("click", () => this.handlePrimaryButton());
+    this.ui.restartButton.addEventListener("click", () => this.restart());
+    this.ui.fullscreenButton.addEventListener("click", () => this.toggleFullscreen());
+    this.ui.soundToggle.addEventListener("click", async () => {
+      await this.audio.activate();
+      const muted = await this.audio.toggleMuted();
+      this.syncSoundLabel(muted);
+    });
+  }
+
+  startLoop() {
+    const loop = (timestamp) => {
+      if (!this.lastFrameTime) {
+        this.lastFrameTime = timestamp;
+      }
+      const delta = Math.min(0.05, (timestamp - this.lastFrameTime) / 1000);
+      this.lastFrameTime = timestamp;
+      this.step(delta);
+      this.render();
+      window.requestAnimationFrame(loop);
+    };
+    window.requestAnimationFrame(loop);
+  }
+
+  handlePrimaryButton() {
+    if (this.mode === "start" || this.mode === "fail" || this.mode === "complete") {
+      this.restart();
+    }
+  }
+
+  async restart(options = {}) {
+    await this.audio.activate();
+    this.audio.startBgm();
+    this.mode = "play";
+    this.player.reset();
+    this.setupPlayerOnGround();
+    this.enemies = this.level.enemies.map((enemy) => new Enemy(enemy));
+    this.projectiles = [];
+    this.pendingShoot = false;
+    this.cameraX = 0;
+    this.timeRemaining = options.timeRemaining ?? GAME_DURATION_SECONDS;
+    this.cloudOffset = 0;
+    if (typeof options.playerX === "number" && Number.isFinite(options.playerX)) {
+      this.setPlayerStartX(options.playerX);
+    }
+    this.hideOverlay();
+    this.updateHud();
+    this.render();
+  }
+
+  requestJump() {
+    if (this.mode !== "play") {
+      return;
+    }
+    this.player.queueJump();
+  }
+
+  requestShoot() {
+    if (this.mode !== "play") {
+      return;
+    }
+    this.pendingShoot = true;
+  }
+
+  setMode(nextMode) {
+    this.mode = nextMode;
+    if (nextMode !== "play") {
+      this.audio.stopBgm();
+    }
+    if (nextMode === "complete") {
+      this.audio.playSuccess();
+    }
+    this.showOverlayForMode(nextMode);
+    this.updateHud();
+  }
+
+  showOverlayForMode(mode) {
+    const copy = OVERLAY_COPY[mode];
+    this.ui.overlay.classList.remove("hidden");
+    this.ui.overlayBadge.textContent = copy.badge;
+    this.ui.overlayTitle.textContent = copy.title;
+    this.ui.overlayText.textContent = copy.text;
+    this.ui.startButton.textContent = copy.button;
+  }
+
+  hideOverlay() {
+    this.ui.overlay.classList.add("hidden");
+  }
+
+  updateHud() {
+    this.ui.timePill.textContent = `남은 시간 ${formatTime(this.timeRemaining)}`;
+  }
+
+  syncSoundLabel(muted = this.audio.isMuted) {
+    this.ui.soundToggle.textContent = muted ? "소리 꺼짐" : "소리 켜짐";
+    this.ui.soundToggle.setAttribute("aria-pressed", String(muted));
+  }
+
+  step(deltaSeconds) {
+    const dt = Math.max(0, deltaSeconds);
+    this.cloudOffset += dt * 18;
+
+    if (this.mode !== "play") {
+      this.audio.update();
+      return;
+    }
+
+    this.timeRemaining = Math.max(0, this.timeRemaining - dt);
+    if (this.timeRemaining === 0) {
+      this.setMode("complete");
+      return;
+    }
+
+    this.player.tick(dt);
+    if (this.player.jumpBufferRemaining > 0 && this.player.canJump()) {
+      this.player.consumeJump();
+      this.player.vy = JUMP_VELOCITY;
+      this.audio.playJump();
+    }
+
+    if (this.pendingShoot && this.player.canShoot()) {
+      this.spawnProjectile();
+      this.player.consumeShootCooldown();
+      this.audio.playShoot();
+    }
+    this.pendingShoot = false;
+
+    this.movePlayer(dt);
+    if (this.mode !== "play") {
+      return;
+    }
+
+    this.updateEnemies(dt);
+    this.updateProjectiles(dt);
+    this.cameraX = clamp(this.player.x - CAMERA_LEAD, 0, Math.max(0, this.level.worldLength - VIEWPORT_WIDTH));
+    this.audio.update();
+    this.updateHud();
+  }
+
+  movePlayer(dt) {
+    const player = this.player;
+    const previous = {
+      x: player.x,
+      y: player.y,
+      right: player.x + player.width,
+      bottom: player.y + player.height,
+      top: player.y
+    };
+
+    player.x += RUN_SPEED * dt;
+    const nearbySolids = this.getNearbySolids(player.x - 20, player.x + player.width + 60);
+    player.onGround = false;
+
+    for (const solid of nearbySolids) {
+      const currentBounds = player.getBounds();
+      if (!rectsIntersect(currentBounds, solid)) {
+        continue;
+      }
+
+      const approachingFromLeft = previous.right <= solid.x + 6;
+      const stepHeight = previous.bottom - solid.y;
+      if (approachingFromLeft && stepHeight >= 0 && stepHeight <= STEP_UP_HEIGHT) {
+        player.x = solid.x - player.width + 4;
+        player.y = solid.y - player.height;
+        player.vy = 0;
+        player.onGround = true;
+        continue;
+      }
+
+      if (approachingFromLeft) {
+        player.x = solid.x - player.width - 0.1;
+      }
+    }
+
+    player.vy += GRAVITY * dt;
+    player.y += player.vy * dt;
+    let landed = false;
+
+    for (const solid of nearbySolids) {
+      const bounds = player.getBounds();
+      if (!rectsIntersect(bounds, solid)) {
+        continue;
+      }
+
+      if (player.vy >= 0 && previous.bottom <= solid.y + 6) {
+        player.y = solid.y - player.height;
+        player.vy = 0;
+        landed = true;
+      } else if (player.vy < 0 && previous.top >= solid.y + solid.height - 6) {
+        player.y = solid.y + solid.height;
+        player.vy = 30;
+      }
+    }
+
+    player.onGround = landed || player.onGround;
+
+    if (this.playerTouchesEnemy()) {
+      this.failRun();
+      return;
+    }
+
+    if (player.y > VIEWPORT_HEIGHT + 40) {
+      this.failRun();
+    }
+  }
+
+  updateEnemies(dt) {
+    for (const enemy of this.enemies) {
+      enemy.update(dt);
+    }
+  }
+
+  updateProjectiles(dt) {
+    for (const projectile of this.projectiles) {
+      projectile.update(dt);
+      if (!projectile.active) {
+        continue;
+      }
+
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) {
+          continue;
+        }
+        if (rectsIntersect(projectile.getBounds(), enemy.getBounds())) {
+          enemy.alive = false;
+          projectile.active = false;
+          this.audio.playHit();
+          break;
+        }
+      }
+
+      if (!projectile.active) {
+        continue;
+      }
+
+      for (const solid of this.getNearbySolids(projectile.x - 20, projectile.x + 20)) {
+        if (rectsIntersect(projectile.getBounds(), solid)) {
+          projectile.active = false;
+          this.audio.playHit();
+          break;
+        }
+      }
+    }
+
+    this.projectiles = this.projectiles.filter((projectile) => projectile.active);
+  }
+
+  playerTouchesEnemy() {
+    const playerBounds = this.player.getBounds();
+    return this.enemies.some((enemy) => enemy.alive && rectsIntersect(playerBounds, enemy.getBounds()));
+  }
+
+  spawnProjectile() {
+    const projectileX = this.player.x + this.player.width + 12;
+    const projectileY = this.player.y + this.player.height * 0.48;
+    this.projectiles.push(new Projectile(projectileX, projectileY));
+  }
+
+  failRun() {
+    this.audio.playDie();
+    this.setMode("fail");
+  }
+
+  setPlayerStartX(playerX) {
+    this.player.x = clamp(playerX, 0, this.level.worldLength - this.player.width - 20);
+    const surfaceY = this.findStandingSurfaceY(this.player.x, this.player.width);
+    this.player.y = surfaceY - this.player.height;
+    this.player.vy = 0;
+    this.player.onGround = true;
+    this.cameraX = clamp(this.player.x - CAMERA_LEAD, 0, Math.max(0, this.level.worldLength - VIEWPORT_WIDTH));
+  }
+
+  findStandingSurfaceY(playerX, width) {
+    let bestY = GROUND_Y;
+    for (const solid of this.getNearbySolids(playerX - 4, playerX + width + 4)) {
+      if (!rangeOverlap(playerX + 6, playerX + width - 6, solid.x, solid.x + solid.width)) {
+        continue;
+      }
+      if (solid.y < bestY) {
+        bestY = solid.y;
+      }
+    }
+    return bestY;
+  }
+
+  getNearbySolids(minX, maxX) {
+    const solids = [];
+    for (const ground of this.level.groundSegments) {
+      if (rangeOverlap(minX, maxX, ground.x, ground.x + ground.width)) {
+        solids.push(ground);
+      }
+    }
+    for (const platform of this.level.platforms) {
+      if (rangeOverlap(minX, maxX, platform.x, platform.x + platform.width)) {
+        solids.push(platform);
+      }
+    }
+    return solids;
+  }
+
+  render() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    this.drawSky(ctx);
+    this.drawSun(ctx);
+    this.drawCloudLayers(ctx);
+    this.drawHills(ctx);
+    this.drawGround(ctx);
+    this.drawPlatforms(ctx);
+    this.drawPits(ctx);
+    this.drawProjectiles(ctx);
+    this.drawEnemies(ctx);
+    this.drawPlayer(ctx);
+    this.drawModeBanner(ctx);
+  }
+
+  drawSky(ctx) {
+    const sky = this.assets.getImage("backgrounds.sky");
+    if (sky) {
+      ctx.drawImage(sky, 0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+      ctx.fillStyle = "rgba(255, 252, 235, 0.16)";
+      ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+      return;
+    }
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, VIEWPORT_HEIGHT);
+    gradient.addColorStop(0, "#8edaff");
+    gradient.addColorStop(0.55, "#d5f4ff");
+    gradient.addColorStop(1, "#fff0bc");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+  }
+
+  drawSun(ctx) {
+    ctx.save();
+    ctx.translate(840, 92);
+    ctx.fillStyle = "#fff0a9";
+    ctx.beginPath();
+    ctx.arc(0, 0, 42, 0, Math.PI * 2);
+    ctx.fill();
+    for (let index = 0; index < 10; index += 1) {
+      const angle = (Math.PI * 2 * index) / 10;
+      ctx.strokeStyle = "rgba(255, 220, 100, 0.95)";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * 60, Math.sin(angle) * 60);
+      ctx.lineTo(Math.cos(angle) * 84, Math.sin(angle) * 84);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawCloudLayers(ctx) {
+    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsFar"), 0.16, 92, 0.72);
+    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsNear"), 0.28, 126, 0.96);
+  }
+
+  drawParallaxStrip(ctx, image, speed, y, alpha = 1) {
+    if (!image) {
+      return;
+    }
+    const ratio = image.width / image.height;
+    const targetHeight = 128;
+    const targetWidth = Math.max(220, targetHeight * ratio);
+    const offset = -((this.cameraX * speed + this.cloudOffset * 4) % targetWidth);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    for (let x = offset - targetWidth; x < VIEWPORT_WIDTH + targetWidth; x += targetWidth) {
+      ctx.drawImage(image, x, y, targetWidth, targetHeight);
+    }
+    ctx.restore();
+  }
+
+  drawHills(ctx) {
+    const hills = this.assets.getImage("backgrounds.hillsFar");
+    if (hills) {
+      const ratio = hills.width / hills.height;
+      const targetHeight = 220;
+      const targetWidth = targetHeight * ratio;
+      const offset = -((this.cameraX * 0.24) % targetWidth);
+      for (let x = offset - targetWidth; x < VIEWPORT_WIDTH + targetWidth; x += targetWidth) {
+        ctx.drawImage(hills, x, 250, targetWidth, targetHeight);
+      }
+      return;
+    }
+
+    ctx.fillStyle = "#b8e89c";
+    ctx.fillRect(0, 300, VIEWPORT_WIDTH, 240);
+  }
+
+  drawGround(ctx) {
+    const groundTile = this.assets.getImage("tiles.ground");
+    const groundTopTile = this.assets.getImage("tiles.groundTop");
+    for (const ground of this.level.groundSegments) {
+      const screenX = ground.x - this.cameraX;
+      if (screenX + ground.width < 0 || screenX > VIEWPORT_WIDTH) {
+        continue;
+      }
+
+      if (groundTile) {
+        for (let x = screenX; x < screenX + ground.width; x += 56) {
+          for (let y = ground.y; y < VIEWPORT_HEIGHT + 84; y += 56) {
+            ctx.drawImage(groundTile, x, y, 56, 56);
+          }
+        }
+      } else {
+        ctx.fillStyle = "#d39a4e";
+        ctx.fillRect(screenX, ground.y, ground.width, ground.height);
+      }
+
+      if (groundTopTile) {
+        for (let x = screenX - 8; x < screenX + ground.width; x += 56) {
+          ctx.drawImage(groundTopTile, x, ground.y - 22, 64, 32);
+        }
+      }
+    }
+  }
+
+  drawPlatforms(ctx) {
+    const brickTile = this.assets.getImage("tiles.brick");
+    const platformTile = this.assets.getImage("tiles.platform");
+    for (const platform of this.level.platforms) {
+      const screenX = platform.x - this.cameraX;
+      if (screenX + platform.width < -20 || screenX > VIEWPORT_WIDTH + 20) {
+        continue;
+      }
+
+      const tile = platform.height <= 36 ? platformTile : brickTile;
+      if (tile) {
+        for (let y = 0; y < platform.height; y += 36) {
+          for (let x = 0; x < platform.width; x += 42) {
+            ctx.drawImage(tile, screenX + x, platform.y + y, 44, 40);
+          }
+        }
+      } else {
+        ctx.fillStyle = "#d99153";
+        ctx.fillRect(screenX, platform.y, platform.width, platform.height);
+      }
+    }
+  }
+
+  drawPits(ctx) {
+    const edgeLeft = this.assets.getImage("tiles.edgeLeft");
+    const edgeRight = this.assets.getImage("tiles.edgeRight");
+    for (const pit of this.level.pits) {
+      const screenX = pit.start - this.cameraX;
+      const width = pit.end - pit.start;
+      if (screenX + width < 0 || screenX > VIEWPORT_WIDTH) {
+        continue;
+      }
+      ctx.fillStyle = "#62738f";
+      ctx.fillRect(screenX, GROUND_Y, width, VIEWPORT_HEIGHT - GROUND_Y);
+      ctx.fillStyle = "rgba(146, 206, 255, 0.35)";
+      ctx.fillRect(screenX + 12, GROUND_Y + 18, Math.max(0, width - 24), 28);
+      if (edgeLeft) {
+        ctx.drawImage(edgeLeft, screenX - 16, GROUND_Y - 30, 28, 34);
+      }
+      if (edgeRight) {
+        ctx.drawImage(edgeRight, screenX + width - 8, GROUND_Y - 30, 28, 34);
+      }
+    }
+  }
+
+  drawPlayer(ctx) {
+    const x = this.player.x - this.cameraX;
+    const y = this.player.y;
+    const bounce = this.player.onGround ? Math.sin(this.player.runCycle) * 2.4 : 0;
+    const bodyY = y + bounce;
+    const torsoW = this.player.width * 0.42;
+    const torsoH = this.player.height * 0.38;
+    const headR = this.player.width * 0.18;
+    const facingTilt = this.player.onGround ? Math.sin(this.player.runCycle) * 0.12 : -0.16;
+
+    ctx.save();
+    ctx.translate(x, bodyY);
+
+    ctx.fillStyle = "#214d9b";
+    ctx.fillRect(this.player.width * 0.29, this.player.height * 0.52, torsoW, torsoH);
+
+    ctx.fillStyle = "#ffdcbf";
+    ctx.beginPath();
+    ctx.arc(this.player.width * 0.52, this.player.height * 0.22, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#f1b02d";
+    ctx.beginPath();
+    ctx.ellipse(this.player.width * 0.5, this.player.height * 0.14, this.player.width * 0.22, this.player.height * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(this.player.width * 0.34, this.player.height * 0.11, this.player.width * 0.34, this.player.height * 0.09);
+
+    ctx.fillStyle = "#f57f58";
+    this.fillRoundRect(
+      ctx,
+      this.player.width * 0.18,
+      this.player.height * 0.36,
+      this.player.width * 0.64,
+      this.player.height * 0.18,
+      16,
+      "#f57f58"
+    );
+
+    ctx.strokeStyle = "#20406b";
+    ctx.lineWidth = 8;
+    const stride = this.player.onGround ? Math.sin(this.player.runCycle) * 11 : 3;
+    ctx.beginPath();
+    ctx.moveTo(this.player.width * 0.36, this.player.height * 0.56);
+    ctx.lineTo(this.player.width * 0.28, this.player.height * 0.82 + stride * 0.2);
+    ctx.moveTo(this.player.width * 0.62, this.player.height * 0.56);
+    ctx.lineTo(this.player.width * 0.72, this.player.height * 0.82 - stride * 0.2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#f9b074";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(this.player.width * 0.3, this.player.height * 0.42);
+    ctx.lineTo(this.player.width * 0.14, this.player.height * (0.49 + facingTilt));
+    ctx.moveTo(this.player.width * 0.7, this.player.height * 0.42);
+    ctx.lineTo(this.player.width * 0.9, this.player.height * 0.51);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#f3c64d";
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(this.player.width * 0.25, this.player.height * 0.88);
+    ctx.lineTo(this.player.width * 0.4, this.player.height * 0.88);
+    ctx.moveTo(this.player.width * 0.6, this.player.height * 0.88);
+    ctx.lineTo(this.player.width * 0.76, this.player.height * 0.88);
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(this.player.width * 0.47, this.player.height * 0.2, 3.4, 0, Math.PI * 2);
+    ctx.arc(this.player.width * 0.58, this.player.height * 0.2, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#333a63";
+    ctx.beginPath();
+    ctx.arc(this.player.width * 0.47, this.player.height * 0.2, 1.5, 0, Math.PI * 2);
+    ctx.arc(this.player.width * 0.58, this.player.height * 0.2, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  drawEnemies(ctx) {
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) {
+        continue;
+      }
+      const x = enemy.x - this.cameraX;
+      if (x + enemy.width < -40 || x > VIEWPORT_WIDTH + 40) {
+        continue;
+      }
+
+      const sway = Math.sin(enemy.walkCycle) * 2;
+      ctx.save();
+      ctx.translate(x, enemy.y + sway);
+
+      ctx.fillStyle = "#a27ce5";
+      ctx.beginPath();
+      ctx.arc(enemy.width * 0.5, enemy.height * 0.46, enemy.width * 0.34, Math.PI, Math.PI * 2);
+      ctx.lineTo(enemy.width * 0.82, enemy.height * 0.72);
+      ctx.quadraticCurveTo(enemy.width * 0.76, enemy.height * 0.9, enemy.width * 0.6, enemy.height * 0.92);
+      ctx.lineTo(enemy.width * 0.4, enemy.height * 0.92);
+      ctx.quadraticCurveTo(enemy.width * 0.24, enemy.height * 0.9, enemy.width * 0.18, enemy.height * 0.72);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#f8d9a7";
+      ctx.beginPath();
+      ctx.ellipse(enemy.width * 0.5, enemy.height * 0.64, enemy.width * 0.28, enemy.height * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(enemy.width * 0.42, enemy.height * 0.58, 5, 0, Math.PI * 2);
+      ctx.arc(enemy.width * 0.58, enemy.height * 0.58, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#40516f";
+      ctx.beginPath();
+      ctx.arc(enemy.width * 0.42, enemy.height * 0.58, 2, 0, Math.PI * 2);
+      ctx.arc(enemy.width * 0.58, enemy.height * 0.58, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#6b4aa9";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(enemy.width * 0.3, enemy.height * 0.92);
+      ctx.lineTo(enemy.width * 0.24, enemy.height * 1.04);
+      ctx.moveTo(enemy.width * 0.7, enemy.height * 0.92);
+      ctx.lineTo(enemy.width * 0.76, enemy.height * 1.04);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  }
+
+  drawProjectiles(ctx) {
+    for (const projectile of this.projectiles) {
+      const x = projectile.x - this.cameraX;
+      if (x < -20 || x > VIEWPORT_WIDTH + 20) {
+        continue;
+      }
+      ctx.fillStyle = "#ffe47e";
+      ctx.beginPath();
+      ctx.arc(x, projectile.y, projectile.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#ffb53e";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x - projectile.radius - 12, projectile.y);
+      ctx.lineTo(x - projectile.radius + 2, projectile.y);
+      ctx.stroke();
+    }
+  }
+
+  drawModeBanner(ctx) {
+    if (this.mode === "play") {
+      return;
+    }
+
+    const copy = OVERLAY_COPY[this.mode];
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 250, 240, 0.38)";
+    ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+
+    const cardX = 116;
+    const cardY = 74;
+    const cardW = 728;
+    const cardH = 280;
+
+    this.fillCloudCard(ctx, cardX, cardY, cardW, cardH);
+    this.fillRoundRect(ctx, cardX + 216, cardY + 28, 296, 52, 24, "#ffe992");
+
+    ctx.fillStyle = "#8f6400";
+    ctx.font = "900 22px Comic Sans MS";
+    ctx.textAlign = "center";
+    ctx.fillText(copy.badge, VIEWPORT_WIDTH / 2, cardY + 62);
+
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#ffffff";
+    ctx.fillStyle = "#4a394f";
+    ctx.font = "900 46px Comic Sans MS";
+    ctx.strokeText(copy.title, VIEWPORT_WIDTH / 2, cardY + 132);
+    ctx.fillText(copy.title, VIEWPORT_WIDTH / 2, cardY + 132);
+
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.fillStyle = "#6d5c74";
+    ctx.font = "900 24px Comic Sans MS";
+    ctx.strokeText(copy.text, VIEWPORT_WIDTH / 2, cardY + 188);
+    ctx.fillText(copy.text, VIEWPORT_WIDTH / 2, cardY + 188);
+
+    this.fillRoundRect(ctx, cardX + 206, cardY + 210, 316, 60, 28, "#f8a34f");
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#ffffff";
+    ctx.fillStyle = "#fff8ef";
+    ctx.font = "900 28px Comic Sans MS";
+    ctx.strokeText(copy.button, VIEWPORT_WIDTH / 2, cardY + 251);
+    ctx.fillText(copy.button, VIEWPORT_WIDTH / 2, cardY + 251);
+    ctx.restore();
+  }
+
+  fillCloudCard(ctx, x, y, width, height) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 250, 242, 0.97)";
+    this.fillRoundRect(ctx, x, y + 18, width, height - 18, 32, "rgba(255, 250, 242, 0.97)");
+    const puffs = [
+      [x + 70, y + 30, 38],
+      [x + 160, y + 12, 48],
+      [x + 282, y + 4, 56],
+      [x + 430, y + 8, 54],
+      [x + 560, y + 20, 44],
+      [x + 660, y + 36, 34]
+    ];
+    for (const [cx, cy, r] of puffs) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  fillRoundRect(ctx, x, y, width, height, radius, fillStyle) {
+    ctx.save();
+    ctx.fillStyle = fillStyle;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  toggleFullscreen() {
+    const root = this.canvas.closest(".game-frame") ?? document.documentElement;
+    if (!document.fullscreenElement) {
+      root.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+
+  advanceTime(ms) {
+    const totalSteps = Math.max(1, Math.round(ms / (this.fixedStep * 1000)));
+    for (let index = 0; index < totalSteps; index += 1) {
+      this.step(this.fixedStep);
+    }
+    this.render();
+  }
+
+  renderGameToText() {
+    const visibleMin = this.cameraX;
+    const visibleMax = this.cameraX + VIEWPORT_WIDTH;
+    const visiblePits = this.level.pits
+      .filter((pit) => rangeOverlap(visibleMin, visibleMax, pit.start, pit.end))
+      .map((pit) => ({ start: Math.round(pit.start), end: Math.round(pit.end) }));
+    const visiblePlatforms = this.level.platforms
+      .filter((platform) => rangeOverlap(visibleMin, visibleMax, platform.x, platform.x + platform.width))
+      .map((platform) => ({
+        x: Math.round(platform.x),
+        y: Math.round(platform.y),
+        width: platform.width,
+        height: platform.height
+      }));
+    const visibleEnemies = this.enemies
+      .filter((enemy) => enemy.alive && rangeOverlap(visibleMin, visibleMax, enemy.x, enemy.x + enemy.width))
+      .map((enemy) => ({
+        x: Math.round(enemy.x),
+        y: Math.round(enemy.y),
+        patrol: [Math.round(enemy.minX), Math.round(enemy.maxX)],
+        direction: enemy.direction
+      }));
+    const visibleProjectiles = this.projectiles
+      .filter((projectile) => projectile.active && projectile.x >= visibleMin - 20 && projectile.x <= visibleMax + 20)
+      .map((projectile) => ({ x: Math.round(projectile.x), y: Math.round(projectile.y) }));
+
+    return JSON.stringify({
+      coordinateSystem: "origin top-left; x increases right; y increases down; world coordinates shown",
+      mode: this.mode,
+      timerRemaining: Number(this.timeRemaining.toFixed(2)),
+      cameraX: Math.round(this.cameraX),
+      player: {
+        x: Math.round(this.player.x),
+        y: Math.round(this.player.y),
+        vx: Math.round(this.player.vx),
+        vy: Math.round(this.player.vy),
+        onGround: this.player.onGround,
+        jumpBufferMs: Math.round(this.player.jumpBufferRemaining * 1000),
+        shootCooldownMs: Math.round(this.player.shootCooldownRemaining * 1000)
+      },
+      visiblePits,
+      visiblePlatforms,
+      visibleEnemies,
+      visibleProjectiles
+    });
+  }
+}

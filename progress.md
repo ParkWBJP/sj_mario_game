@@ -1,0 +1,24 @@
+Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 자동 달리기 횡스크롤 점프 액션 게임을 브라우저에서 실행 가능한 형태로 만들고, 점프/발사 2버튼 조작, 구덩이/벽돌/순찰 몬스터, 3분 완료, 시작/실패/완료/재시작 상태, 밝고 귀여운 UI, 소리 on/off, 시간 표시, 추후 교체 쉬운 에셋 구조를 포함한다.
+
+- Created a fresh static web game scaffold with `index.html`, base styling, and a tiny Node static server in `scripts/dev-server.mjs`.
+- Implemented modular gameplay files for state, level layout, entities, audio, rendering, and DOM wiring under `src/`.
+- Added original vector art rendering, large touch buttons, timer HUD, sound toggle, start/fail/complete states, and restart flow.
+- Added deterministic hooks `window.render_game_to_text` and `window.advanceTime(ms)` for automated browser testing.
+- Added query-param debug starts in `src/main.js`: `?startX=<number>` and `?timeRemaining=<seconds>` for targeted validation.
+- Added Playwright helper copies `.codex-web_game_playwright_client.js` and `.codex-action_payloads.json` locally because the shared skill script could not resolve the workspace `playwright` dependency from the home directory.
+- Connected provided assets under `assets/` to the running game:
+- background layers, ground/platform tiles, start button art, and audio files are now used at runtime.
+- character/enemy sprites are also wired with best-effort bright-background keying, but the source PNGs still contain visible light checkerboard pixels, so clean transparency would require cleaner sprite exports.
+- Reworked the presentation layer for the latest request:
+- switched the hero and enemy back to fully vector-drawn characters so no square sprite boxes remain on screen.
+- moved jump/shoot controls inside the game area, added an in-game fullscreen button, and stretched the layout to fill the viewport.
+- changed all visible copy to cloud-style playful typography and updated the start title to `서준 서진이를 위한 마리오 게임`.
+- enlarged player, enemy, and brick/platform geometry by roughly 30 percent and moved all enemies to ground-only patrol routes.
+- Validation completed with screenshot + state captures:
+- `output/playwright-start`: start screen card visible on canvas.
+- `output/playwright-pit`: pit failure state visible with retry card.
+- `output/playwright-enemy`: shooting scenario leaves `visibleEnemies: []` and stays in `mode: "play"`.
+- `output/playwright-complete`: completion card visible after countdown expires.
+- `output/playwright-assets-start-2` and `output/playwright-assets-play-4`: confirmed provided asset set is being rendered.
+- `output/playwright-ui-start/shot-0.png` and `output/playwright-ui-play/shot-0.png`: confirmed the revised start screen, larger objects, and vector character/enemy visuals.
+- Remaining loose end: Playwright verification commands often timed out after artifacts were already written, but screenshots/state files were generated successfully and used for inspection.
