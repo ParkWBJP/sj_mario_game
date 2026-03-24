@@ -42,6 +42,15 @@ const OVERLAY_COPY = {
   }
 };
 
+const START_TITLE_HTML = `
+  <span class="cloud-title-line">
+    <span>서준</span>
+    <img class="cloud-title-heart" src="./assets/images/ui/heart.png" alt="" aria-hidden="true" />
+    <span>서진이를 위한</span>
+  </span>
+  <span class="cloud-title-line">마리오 게임</span>
+`;
+
 export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas;
@@ -215,7 +224,11 @@ export class Game {
     }
     this.ui.overlay.classList.remove("hidden");
     this.ui.overlayBadge.textContent = copy.badge;
-    this.ui.overlayTitle.textContent = copy.title;
+    if (mode === "start") {
+      this.ui.overlayTitle.innerHTML = START_TITLE_HTML;
+    } else {
+      this.ui.overlayTitle.textContent = copy.title;
+    }
     this.ui.overlayText.textContent = copy.text;
     this.ui.startButton.textContent = copy.button;
     this.ui.overlayKids?.classList.toggle("hidden", mode !== "start");
