@@ -36,3 +36,4 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - Added stomp handling: landing on top of a monster while falling now defeats it and bounces the player upward; side collisions still trigger fail state.
 - Reworked the win condition: defeating 5 monsters unlocks a goal flag, and the run only completes when the player reaches that flag before the 2-minute timer ends.
 - Added a second HUD pill for monster progress and exposed `window.__game` for deterministic browser verification of goal unlock / completion states.
+- Investigated Vercel production failures: local reproduction showed `npm run build` failed because `package.json` had no `build` script. Added a static build step and `vercel.json` so deployments publish `dist/`.
