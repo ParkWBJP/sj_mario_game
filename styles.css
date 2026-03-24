@@ -33,6 +33,10 @@ body {
   min-height: 100vh;
 }
 
+body.pseudo-fullscreen-body {
+  overflow: hidden;
+}
+
 .app-shell,
 .game-frame,
 .canvas-wrap {
@@ -42,6 +46,14 @@ body {
 
 .game-frame {
   position: relative;
+}
+
+.game-frame.pseudo-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
 }
 
 .canvas-wrap {
@@ -66,7 +78,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 14px;
-  z-index: 3;
+  z-index: 6;
   pointer-events: none;
 }
 
@@ -142,8 +154,8 @@ body {
 }
 
 .overlay-card {
-  width: min(92vw, 760px);
-  padding: 30px 28px 26px;
+  width: min(84vw, 640px);
+  padding: 22px 20px 18px;
   border-radius: 36px;
   text-align: center;
   background: linear-gradient(180deg, rgba(255, 252, 244, 0.96), rgba(255, 245, 229, 0.96));
@@ -152,10 +164,10 @@ body {
 }
 
 .overlay-kids {
-  margin: 20px auto 16px;
+  margin: 12px auto 10px;
   display: flex;
   justify-content: center;
-  gap: 32px;
+  gap: 22px;
   flex-wrap: wrap;
 }
 
@@ -165,8 +177,8 @@ body {
 
 .kid-card {
   margin: 0;
-  width: min(34vw, 260px);
-  min-width: 170px;
+  width: min(28vw, 210px);
+  min-width: 140px;
   padding: 4px 4px 8px;
   border-radius: 34px;
   background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95), rgba(255, 248, 232, 0.15) 72%, transparent 73%);
@@ -175,7 +187,7 @@ body {
 .kid-card img {
   display: block;
   width: 100%;
-  height: 320px;
+  height: 244px;
   object-fit: contain;
   filter: drop-shadow(0 16px 28px rgba(106, 81, 66, 0.24));
 }
@@ -206,7 +218,7 @@ body {
 .cloud-title {
   margin: 14px 0 12px;
   font-family: var(--font-cloud);
-  font-size: clamp(2rem, 5vw, 3.6rem);
+  font-size: clamp(1.8rem, 4.4vw, 3.15rem);
   line-height: 1.1;
   color: #49364d;
   text-shadow:
@@ -219,26 +231,26 @@ body {
 
 .cloud-copy {
   margin: 0;
-  font-size: clamp(1rem, 2.2vw, 1.45rem);
-  line-height: 1.5;
+  font-size: clamp(0.95rem, 1.9vw, 1.22rem);
+  line-height: 1.35;
   color: var(--soft-ink);
   font-weight: 900;
 }
 
 .hint-grid {
-  margin: 24px 0;
+  margin: 14px 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .hint-card {
   border-radius: 24px;
-  padding: 18px 14px;
+  padding: 14px 12px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   justify-items: center;
-  font-size: clamp(0.95rem, 1.8vw, 1.1rem);
+  font-size: clamp(0.9rem, 1.55vw, 1rem);
   font-weight: 900;
 }
 
@@ -261,10 +273,10 @@ body {
 }
 
 .primary-button {
-  min-height: 76px;
-  width: min(100%, 320px);
+  min-height: 62px;
+  width: min(100%, 286px);
   background: linear-gradient(180deg, #ffc86a, #ff9959);
-  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  font-size: clamp(1.15rem, 2.6vw, 1.55rem);
 }
 
 .game-controls {
@@ -318,8 +330,8 @@ button:focus-visible {
   }
 
   .overlay-card {
-    width: min(94vw, 680px);
-    padding: 24px 18px 20px;
+    width: min(92vw, 576px);
+    padding: 20px 14px 16px;
   }
 
   .hint-grid {
@@ -331,12 +343,12 @@ button:focus-visible {
   }
 
   .kid-card {
-    width: min(42vw, 210px);
-    min-width: 130px;
+    width: min(35vw, 172px);
+    min-width: 112px;
   }
 
   .kid-card img {
-    height: 230px;
+    height: 182px;
   }
 
   .game-controls {

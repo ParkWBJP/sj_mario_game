@@ -47,6 +47,7 @@ export class Game {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.ui = ui;
+    this.fullscreenRoot = this.canvas.closest(".game-frame") ?? document.documentElement;
     this.assets = new AssetLibrary();
     this.audio = new AudioManager();
     this.mode = "start";
@@ -64,6 +65,8 @@ export class Game {
     this.goal = this.createGoalState();
     this.setupPlayerOnGround();
     this.updateHud();
+    this.syncFullscreenLabel();
+    this.audio.startBgm();
     this.assets.preload().then(() => this.render());
   }
 
@@ -92,6 +95,10 @@ export class Game {
       event?.preventDefault?.();
       this.requestShoot();
     };
+    const playButtonClick = async () => {
+      await this.audio.activate();
+      this.audio.playUiClick();
+    };
 
     window.addEventListener("keydown", (event) => {
       if (event.repeat) {
@@ -106,16 +113,37 @@ export class Game {
       }
     });
 
-    this.ui.jumpButton.addEventListener("pointerdown", pressJump);
-    this.ui.shootButton.addEventListener("pointerdown", pressShoot);
-    this.ui.startButton.addEventListener("click", () => this.handlePrimaryButton());
-    this.ui.restartButton.addEventListener("click", () => this.restart());
-    this.ui.fullscreenButton.addEventListener("click", () => this.toggleFullscreen());
+    this.ui.jumpButton.addEventListener("pointerdown", async (event) => {
+      await playButtonClick();
+      pressJump(event);
+    });
+    this.ui.shootButton.addEventListener("pointerdown", async (event) => {
+      await playButtonClick();
+      pressShoot(event);
+    });
+    this.ui.startButton.addEventListener("click", async () => {
+      await playButtonClick();
+      this.handlePrimaryButton();
+    });
+    this.ui.restartButton.addEventListener("click", async () => {
+      await playButtonClick();
+      this.restart();
+    });
+    this.ui.fullscreenButton.addEventListener("click", async () => {
+      await playButtonClick();
+      this.toggleFullscreen();
+    });
     this.ui.soundToggle.addEventListener("click", async () => {
       await this.audio.activate();
       const muted = await this.audio.toggleMuted();
       this.syncSoundLabel(muted);
+      if (!muted) {
+        this.audio.playUiClick();
+      }
     });
+
+    document.addEventListener("fullscreenchange", () => this.syncFullscreenLabel());
+    document.addEventListener("webkitfullscreenchange", () => this.syncFullscreenLabel());
   }
 
   startLoop() {
@@ -788,13 +816,73 @@ export class Game {
     }
   }
 
-  toggleFullscreen() {
-    const root = this.canvas.closest(".game-frame") ?? document.documentElement;
-    if (!document.fullscreenElement) {
-      root.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
+  getFullscreenElement() {
+    return document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+  }
+
+  isPseudoFullscreen() {
+    return this.fullscreenRoot.classList.contains("pseudo-fullscreen");
+  }
+
+  syncFullscreenLabel() {
+    const active = Boolean(this.getFullscreenElement()) || this.isPseudoFullscreen();
+    this.ui.fullscreenButton.textContent = active ? "화면 줄이기" : "전체 화면";
+    this.ui.fullscreenButton.setAttribute("aria-pressed", String(active));
+  }
+
+  async requestRealFullscreen() {
+    const root = this.fullscreenRoot;
+    if (root.requestFullscreen) {
+      await root.requestFullscreen();
+      return true;
     }
+    if (root.webkitRequestFullscreen) {
+      root.webkitRequestFullscreen();
+      return true;
+    }
+    return false;
+  }
+
+  async exitRealFullscreen() {
+    if (document.exitFullscreen) {
+      await document.exitFullscreen();
+      return true;
+    }
+    if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+      return true;
+    }
+    return false;
+  }
+
+  setPseudoFullscreen(active) {
+    this.fullscreenRoot.classList.toggle("pseudo-fullscreen", active);
+    document.body.classList.toggle("pseudo-fullscreen-body", active);
+    this.syncFullscreenLabel();
+  }
+
+  async toggleFullscreen() {
+    if (this.getFullscreenElement()) {
+      await this.exitRealFullscreen();
+      this.syncFullscreenLabel();
+      return;
+    }
+
+    if (this.isPseudoFullscreen()) {
+      this.setPseudoFullscreen(false);
+      return;
+    }
+
+    try {
+      const entered = await this.requestRealFullscreen();
+      if (!entered) {
+        this.setPseudoFullscreen(true);
+      }
+    } catch {
+      this.setPseudoFullscreen(true);
+    }
+
+    this.syncFullscreenLabel();
   }
 
   advanceTime(ms) {

@@ -37,3 +37,5 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - Reworked the win condition: defeating 5 monsters unlocks a goal flag, and the run only completes when the player reaches that flag before the 2-minute timer ends.
 - Added a second HUD pill for monster progress and exposed `window.__game` for deterministic browser verification of goal unlock / completion states.
 - Investigated Vercel production failures: local reproduction showed `npm run build` failed because `package.json` had no `build` script. Added a static build step and `vercel.json` so deployments publish `dist/`.
+- Removed runtime background-trimming for the kids photos so newly uploaded images render as-is, and changed BGM to start attempting playback immediately on entry instead of waiting for gameplay start.
+- Added button click SFX using the item pickup sound for start, restart, sound toggle, fullscreen, jump, and shoot buttons.

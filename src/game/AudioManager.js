@@ -104,6 +104,10 @@ export class AudioManager {
     this.playSfx("hit");
   }
 
+  playUiClick() {
+    this.playSfx("hit");
+  }
+
   playDie() {
     this.playSfx("die");
   }
