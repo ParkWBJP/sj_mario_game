@@ -113,14 +113,8 @@ export class Game {
       }
     });
 
-    this.ui.jumpButton.addEventListener("pointerdown", async (event) => {
-      await playButtonClick();
-      pressJump(event);
-    });
-    this.ui.shootButton.addEventListener("pointerdown", async (event) => {
-      await playButtonClick();
-      pressShoot(event);
-    });
+    this.ui.jumpButton.addEventListener("pointerdown", pressJump);
+    this.ui.shootButton.addEventListener("pointerdown", pressShoot);
     this.ui.startButton.addEventListener("click", async () => {
       await playButtonClick();
       this.handlePrimaryButton();
