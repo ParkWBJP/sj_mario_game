@@ -33,3 +33,4 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - expanded `clouds_near` by trimming transparent bounds before render and increasing its draw height.
 - strengthened the kids photo cutout step for checkerboard backgrounds and enlarged the start-screen portraits.
 - tightened level placement so pits, platforms, and patrol zones keep extra spacing instead of stacking into each other.
+- Added stomp handling: landing on top of a monster while falling now defeats it and bounces the player upward; side collisions still trigger fail state.

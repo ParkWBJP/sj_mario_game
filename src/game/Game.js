@@ -289,7 +289,9 @@ export class Game {
 
     player.onGround = landed || player.onGround;
 
-    if (this.playerTouchesEnemy()) {
+    if (this.tryStompEnemy(previous)) {
+      player.onGround = false;
+    } else if (this.playerTouchesEnemy()) {
       this.failRun();
       return;
     }
@@ -343,6 +345,46 @@ export class Game {
   playerTouchesEnemy() {
     const playerBounds = this.player.getBounds();
     return this.enemies.some((enemy) => enemy.alive && rectsIntersect(playerBounds, enemy.getBounds()));
+  }
+
+  tryStompEnemy(previous) {
+    if (this.player.vy < 0) {
+      return false;
+    }
+
+    const playerBounds = this.player.getBounds();
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) {
+        continue;
+      }
+
+      const enemyBounds = enemy.getBounds();
+      if (!rectsIntersect(playerBounds, enemyBounds)) {
+        continue;
+      }
+
+      const previousBottom = previous.bottom;
+      const enemyTop = enemyBounds.y;
+      const horizontalOverlap =
+        playerBounds.x + playerBounds.width > enemyBounds.x + enemyBounds.width * 0.2 &&
+        playerBounds.x < enemyBounds.x + enemyBounds.width * 0.8;
+      const stompWindow = enemyBounds.height * 0.45 + 10;
+      const cameFromAbove = previousBottom <= enemyTop + stompWindow;
+
+      if (!horizontalOverlap || !cameFromAbove) {
+        continue;
+      }
+
+      enemy.alive = false;
+      this.player.y = enemyTop - this.player.height - 2;
+      this.player.vy = JUMP_VELOCITY * 0.45;
+      this.player.jumpBufferRemaining = 0;
+      this.player.coyoteRemaining = 0;
+      this.audio.playHit();
+      return true;
+    }
+
+    return false;
   }
 
   spawnProjectile() {
