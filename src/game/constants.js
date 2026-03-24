@@ -20,3 +20,6 @@ export const ENEMY_HEIGHT = 60;
 export const CAMERA_LEAD = 180;
 export const WORLD_LENGTH = RUN_SPEED * GAME_DURATION_SECONDS + 2400;
 export const STEP_UP_HEIGHT = 36;
+export const TARGET_MONSTER_DEFEATS = 5;
+export const GOAL_SPAWN_DISTANCE = 760;
+export const GOAL_POLE_HEIGHT = 152;

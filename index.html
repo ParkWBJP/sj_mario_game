@@ -17,7 +17,10 @@
           <canvas id="game-canvas" width="960" height="540" aria-label="자동 달리기 점프 게임"></canvas>
 
           <div class="hud-row">
-            <div class="pill cloud-pill" id="time-pill">남은 시간 3:00</div>
+            <div class="hud-status">
+              <div class="pill cloud-pill" id="time-pill">남은 시간 2:00</div>
+              <div class="pill cloud-pill" id="goal-pill">몬스터 0 / 5</div>
+            </div>
             <div class="hud-actions">
               <button class="icon-button cloud-button" id="sound-toggle" type="button" aria-pressed="false">소리 켜짐</button>
               <button class="icon-button cloud-button" id="fullscreen-button" type="button">전체 화면</button>
@@ -29,7 +32,7 @@
             <div class="overlay-card">
               <div class="mini-badge cloud-badge" id="overlay-badge">서준 서진이 전용</div>
               <h1 class="cloud-title" id="overlay-title">서준 서진이를 위한 마리오 게임</h1>
-              <p class="cloud-copy" id="overlay-text">점프로 폴짝, 발사로 팡팡. 구덩이와 몬스터를 넘어 2분 동안 달려요.</p>
+              <p class="cloud-copy" id="overlay-text">몬스터 5마리를 잡으면 깃발이 나와요. 2분 안에 골인해요.</p>
               <div class="overlay-kids" id="overlay-kids">
                 <figure class="kid-card">
                   <img src="./assets/seojun.png" alt="서준이" id="seojun-image" />

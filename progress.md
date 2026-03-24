@@ -34,3 +34,5 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - strengthened the kids photo cutout step for checkerboard backgrounds and enlarged the start-screen portraits.
 - tightened level placement so pits, platforms, and patrol zones keep extra spacing instead of stacking into each other.
 - Added stomp handling: landing on top of a monster while falling now defeats it and bounces the player upward; side collisions still trigger fail state.
+- Reworked the win condition: defeating 5 monsters unlocks a goal flag, and the run only completes when the player reaches that flag before the 2-minute timer ends.
+- Added a second HUD pill for monster progress and exposed `window.__game` for deterministic browser verification of goal unlock / completion states.

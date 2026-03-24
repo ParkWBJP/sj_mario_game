@@ -163,6 +163,7 @@ function trimPhotoElement(img) {
 
 const ui = {
   timePill: document.querySelector("#time-pill"),
+  goalPill: document.querySelector("#goal-pill"),
   soundToggle: document.querySelector("#sound-toggle"),
   fullscreenButton: document.querySelector("#fullscreen-button"),
   restartButton: document.querySelector("#restart-button"),
@@ -204,3 +205,4 @@ if (autostart) {
 
 window.render_game_to_text = () => game.renderGameToText();
 window.advanceTime = (ms) => game.advanceTime(ms);
+window.__game = game;

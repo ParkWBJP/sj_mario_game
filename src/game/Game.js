@@ -3,12 +3,15 @@ import { AssetLibrary } from "./AssetLibrary.js";
 import {
   CAMERA_LEAD,
   GAME_DURATION_SECONDS,
+  GOAL_POLE_HEIGHT,
+  GOAL_SPAWN_DISTANCE,
   GRAVITY,
   GROUND_Y,
   JUMP_VELOCITY,
   PLAYER_HEIGHT,
   RUN_SPEED,
   STEP_UP_HEIGHT,
+  TARGET_MONSTER_DEFEATS,
   VIEWPORT_HEIGHT,
   VIEWPORT_WIDTH
 } from "./constants.js";
@@ -22,19 +25,19 @@ const OVERLAY_COPY = {
   start: {
     badge: "서준 서진이 전용",
     title: "서준 서진이를 위한 마리오 게임",
-    text: "점프로 폴짝, 발사로 팡팡. 구덩이와 몬스터를 넘어 2분 동안 달려요.",
+    text: "몬스터 5마리를 잡으면 깃발이 나와요. 2분 안에 골인해요.",
     button: "시작하기"
   },
   fail: {
     badge: "다시 한번",
     title: "앗, 다시 달려볼까요?",
-    text: "조금만 더 폴짝 뛰면 금방 성공할 수 있어요.",
+    text: "몬스터를 잡고 깃발까지 가면 성공이에요.",
     button: "다시 시작"
   },
   complete: {
     badge: "게임 완료",
-    title: "서준이와 서진이가 멋지게 성공했어요",
-    text: "2분 동안 씩씩하게 달렸어요. 버튼을 누르면 처음부터 다시 놀아요.",
+    title: "깃발에 도착했어요!",
+    text: "몬스터 5마리를 잡고 멋지게 골인했어요.",
     button: "다시 시작"
   }
 };
@@ -57,9 +60,22 @@ export class Game {
     this.fixedStep = 1 / 60;
     this.cloudOffset = 0;
     this.pendingShoot = false;
+    this.defeatedEnemies = 0;
+    this.goal = this.createGoalState();
     this.setupPlayerOnGround();
     this.updateHud();
     this.assets.preload().then(() => this.render());
+  }
+
+  createGoalState() {
+    return {
+      unlocked: false,
+      reached: false,
+      x: 0,
+      groundY: GROUND_Y,
+      width: 58,
+      height: GOAL_POLE_HEIGHT
+    };
   }
 
   setupPlayerOnGround() {
@@ -134,6 +150,8 @@ export class Game {
     this.cameraX = 0;
     this.timeRemaining = options.timeRemaining ?? GAME_DURATION_SECONDS;
     this.cloudOffset = 0;
+    this.defeatedEnemies = 0;
+    this.goal = this.createGoalState();
     if (typeof options.playerX === "number" && Number.isFinite(options.playerX)) {
       this.setPlayerStartX(options.playerX);
     }
@@ -170,6 +188,9 @@ export class Game {
 
   showOverlayForMode(mode) {
     const copy = OVERLAY_COPY[mode];
+    if (!copy) {
+      return;
+    }
     this.ui.overlay.classList.remove("hidden");
     this.ui.overlayBadge.textContent = copy.badge;
     this.ui.overlayTitle.textContent = copy.title;
@@ -184,6 +205,11 @@ export class Game {
 
   updateHud() {
     this.ui.timePill.textContent = `남은 시간 ${formatTime(this.timeRemaining)}`;
+    if (this.ui.goalPill) {
+      this.ui.goalPill.textContent = this.goal.unlocked
+        ? "깃발로 가요!"
+        : `몬스터 ${this.defeatedEnemies} / ${TARGET_MONSTER_DEFEATS}`;
+    }
   }
 
   syncSoundLabel(muted = this.audio.isMuted) {
@@ -202,7 +228,7 @@ export class Game {
 
     this.timeRemaining = Math.max(0, this.timeRemaining - dt);
     if (this.timeRemaining === 0) {
-      this.setMode("complete");
+      this.failRun();
       return;
     }
 
@@ -227,6 +253,11 @@ export class Game {
 
     this.updateEnemies(dt);
     this.updateProjectiles(dt);
+    this.checkGoalReached();
+    if (this.mode !== "play") {
+      return;
+    }
+
     this.cameraX = clamp(this.player.x - CAMERA_LEAD, 0, Math.max(0, this.level.worldLength - VIEWPORT_WIDTH));
     this.audio.update();
     this.updateHud();
@@ -319,9 +350,8 @@ export class Game {
           continue;
         }
         if (rectsIntersect(projectile.getBounds(), enemy.getBounds())) {
-          enemy.alive = false;
+          this.defeatEnemy(enemy);
           projectile.active = false;
-          this.audio.playHit();
           break;
         }
       }
@@ -345,6 +375,20 @@ export class Game {
   playerTouchesEnemy() {
     const playerBounds = this.player.getBounds();
     return this.enemies.some((enemy) => enemy.alive && rectsIntersect(playerBounds, enemy.getBounds()));
+  }
+
+  defeatEnemy(enemy) {
+    if (!enemy || !enemy.alive) {
+      return;
+    }
+
+    enemy.alive = false;
+    this.defeatedEnemies += 1;
+    this.audio.playHit();
+    if (this.defeatedEnemies >= TARGET_MONSTER_DEFEATS) {
+      this.unlockGoal();
+    }
+    this.updateHud();
   }
 
   tryStompEnemy(previous) {
@@ -375,16 +419,62 @@ export class Game {
         continue;
       }
 
-      enemy.alive = false;
+      this.defeatEnemy(enemy);
       this.player.y = enemyTop - this.player.height - 2;
       this.player.vy = JUMP_VELOCITY * 0.45;
       this.player.jumpBufferRemaining = 0;
       this.player.coyoteRemaining = 0;
-      this.audio.playHit();
       return true;
     }
 
     return false;
+  }
+
+  unlockGoal() {
+    if (this.goal.unlocked) {
+      return;
+    }
+
+    const desiredX = this.player.x + GOAL_SPAWN_DISTANCE;
+    const segment = this.findGoalGroundSegment(desiredX);
+    if (segment) {
+      const minX = Math.max(desiredX, segment.x + 96);
+      const maxX = Math.max(segment.x + 96, segment.x + segment.width - 88);
+      this.goal.x = clamp(minX, segment.x + 96, maxX);
+      this.goal.groundY = segment.y;
+    } else {
+      this.goal.x = desiredX;
+      this.goal.groundY = GROUND_Y;
+    }
+
+    this.goal.unlocked = true;
+    this.updateHud();
+  }
+
+  findGoalGroundSegment(minX) {
+    return this.level.groundSegments.find(
+      (segment) => segment.x + segment.width > minX + 120 && segment.width >= 220
+    );
+  }
+
+  getGoalBounds() {
+    return {
+      x: this.goal.x - 18,
+      y: this.goal.groundY - this.goal.height,
+      width: this.goal.width,
+      height: this.goal.height
+    };
+  }
+
+  checkGoalReached() {
+    if (!this.goal.unlocked || this.goal.reached) {
+      return;
+    }
+
+    if (rectsIntersect(this.player.getBounds(), this.getGoalBounds())) {
+      this.goal.reached = true;
+      this.setMode("complete");
+    }
   }
 
   spawnProjectile() {
@@ -394,6 +484,9 @@ export class Game {
   }
 
   failRun() {
+    if (this.mode !== "play") {
+      return;
+    }
     this.audio.playDie();
     this.setMode("fail");
   }
@@ -445,6 +538,7 @@ export class Game {
     this.drawGround(ctx);
     this.drawPlatforms(ctx);
     this.drawPits(ctx);
+    this.drawGoal(ctx);
     this.drawProjectiles(ctx);
     this.drawEnemies(ctx);
     this.drawPlayer(ctx);
@@ -596,6 +690,43 @@ export class Game {
     }
   }
 
+  drawGoal(ctx) {
+    if (!this.goal.unlocked) {
+      return;
+    }
+
+    const bounds = this.getGoalBounds();
+    const screenX = bounds.x - this.cameraX;
+    if (screenX + bounds.width < -40 || screenX > VIEWPORT_WIDTH + 40) {
+      return;
+    }
+
+    const flagpole = this.assets.getImage("goal.flagpole");
+    if (flagpole) {
+      ctx.drawImage(flagpole, screenX - 20, bounds.y - 6, 90, bounds.height + 20);
+    } else {
+      ctx.fillStyle = "#f5f7ff";
+      ctx.fillRect(screenX + 18, bounds.y, 10, bounds.height);
+      ctx.fillStyle = "#ffd86c";
+      ctx.beginPath();
+      ctx.arc(screenX + 23, bounds.y + 8, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ff7a72";
+      ctx.beginPath();
+      ctx.moveTo(screenX + 28, bounds.y + 18);
+      ctx.lineTo(screenX + 78, bounds.y + 34);
+      ctx.lineTo(screenX + 28, bounds.y + 52);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgba(255, 250, 240, 0.95)";
+    ctx.fillRect(screenX - 10, bounds.y - 42, 132, 32);
+    ctx.fillStyle = "#6b5970";
+    ctx.font = '900 18px "Jua", sans-serif';
+    ctx.fillText("여기로 골인!", screenX + 8, bounds.y - 19);
+  }
+
   drawPlayer(ctx) {
     const x = this.player.x - this.cameraX;
     const y = this.player.y;
@@ -704,6 +835,19 @@ export class Game {
       coordinateSystem: "origin top-left; x increases right; y increases down; world coordinates shown",
       mode: this.mode,
       timerRemaining: Number(this.timeRemaining.toFixed(2)),
+      defeatedEnemies: this.defeatedEnemies,
+      targetDefeats: TARGET_MONSTER_DEFEATS,
+      goal: this.goal.unlocked
+        ? {
+            unlocked: true,
+            reached: this.goal.reached,
+            x: Math.round(this.goal.x),
+            y: Math.round(this.goal.groundY)
+          }
+        : {
+            unlocked: false,
+            reached: false
+          },
       cameraX: Math.round(this.cameraX),
       player: {
         x: Math.round(this.player.x),
