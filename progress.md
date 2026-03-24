@@ -14,6 +14,11 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - moved jump/shoot controls inside the game area, added an in-game fullscreen button, and stretched the layout to fill the viewport.
 - changed all visible copy to cloud-style playful typography and updated the start title to `서준 서진이를 위한 마리오 게임`.
 - enlarged player, enemy, and brick/platform geometry by roughly 30 percent and moved all enemies to ground-only patrol routes.
+- Follow-up polish pass:
+- replaced the serif-looking UI text with a rounded Korean webfont stack and removed the duplicated canvas start-card rendering.
+- added `assets/seojun.png` and `assets/seojin.png` to the main start screen.
+- reduced total game time from 3 minutes to 2 minutes.
+- restored gameplay sprites and fixed the trim pipeline bug so sprite background removal actually applies before cropping.
 - Validation completed with screenshot + state captures:
 - `output/playwright-start`: start screen card visible on canvas.
 - `output/playwright-pit`: pit failure state visible with retry card.
@@ -21,4 +26,10 @@ Original prompt: 4~5살 아이가 쉽게 즐길 수 있는 내부 테스트용 �
 - `output/playwright-complete`: completion card visible after countdown expires.
 - `output/playwright-assets-start-2` and `output/playwright-assets-play-4`: confirmed provided asset set is being rendered.
 - `output/playwright-ui-start/shot-0.png` and `output/playwright-ui-play/shot-0.png`: confirmed the revised start screen, larger objects, and vector character/enemy visuals.
+- `output/start-final-browser.png`: confirmed the revised main screen with the kids' photos and rounded Korean title treatment.
+- `output/play-final-browser-3.png`: confirmed gameplay uses cleaned sprites, ground-only enemies, and the 2-minute HUD.
 - Remaining loose end: Playwright verification commands often timed out after artifacts were already written, but screenshots/state files were generated successfully and used for inspection.
+- Follow-up pass in progress:
+- expanded `clouds_near` by trimming transparent bounds before render and increasing its draw height.
+- strengthened the kids photo cutout step for checkerboard backgrounds and enlarged the start-screen portraits.
+- tightened level placement so pits, platforms, and patrol zones keep extra spacing instead of stacking into each other.

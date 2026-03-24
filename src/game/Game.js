@@ -22,7 +22,7 @@ const OVERLAY_COPY = {
   start: {
     badge: "서준 서진이 전용",
     title: "서준 서진이를 위한 마리오 게임",
-    text: "점프로 폴짝, 발사로 팡팡. 구덩이와 몬스터를 넘어 3분 동안 달려요.",
+    text: "점프로 폴짝, 발사로 팡팡. 구덩이와 몬스터를 넘어 2분 동안 달려요.",
     button: "시작하기"
   },
   fail: {
@@ -34,7 +34,7 @@ const OVERLAY_COPY = {
   complete: {
     badge: "게임 완료",
     title: "서준이와 서진이가 멋지게 성공했어요",
-    text: "3분 동안 씩씩하게 달렸어요. 버튼을 누르면 처음부터 다시 놀아요.",
+    text: "2분 동안 씩씩하게 달렸어요. 버튼을 누르면 처음부터 다시 놀아요.",
     button: "다시 시작"
   }
 };
@@ -175,6 +175,7 @@ export class Game {
     this.ui.overlayTitle.textContent = copy.title;
     this.ui.overlayText.textContent = copy.text;
     this.ui.startButton.textContent = copy.button;
+    this.ui.overlayKids?.classList.toggle("hidden", mode !== "start");
   }
 
   hideOverlay() {
@@ -405,7 +406,6 @@ export class Game {
     this.drawProjectiles(ctx);
     this.drawEnemies(ctx);
     this.drawPlayer(ctx);
-    this.drawModeBanner(ctx);
   }
 
   drawSky(ctx) {
@@ -445,16 +445,15 @@ export class Game {
   }
 
   drawCloudLayers(ctx) {
-    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsFar"), 0.16, 92, 0.72);
-    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsNear"), 0.28, 126, 0.96);
+    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsFar"), 0.16, 84, 0.7, 156);
+    this.drawParallaxStrip(ctx, this.assets.getImage("backgrounds.cloudsNear"), 0.28, 54, 0.98, 320);
   }
 
-  drawParallaxStrip(ctx, image, speed, y, alpha = 1) {
+  drawParallaxStrip(ctx, image, speed, y, alpha = 1, targetHeight = 128) {
     if (!image) {
       return;
     }
     const ratio = image.width / image.height;
-    const targetHeight = 128;
     const targetWidth = Math.max(220, targetHeight * ratio);
     const offset = -((this.cameraX * speed + this.cloudOffset * 4) % targetWidth);
     ctx.save();
@@ -558,84 +557,30 @@ export class Game {
   drawPlayer(ctx) {
     const x = this.player.x - this.cameraX;
     const y = this.player.y;
-    const bounce = this.player.onGround ? Math.sin(this.player.runCycle) * 2.4 : 0;
-    const bodyY = y + bounce;
-    const torsoW = this.player.width * 0.42;
-    const torsoH = this.player.height * 0.38;
-    const headR = this.player.width * 0.18;
-    const facingTilt = this.player.onGround ? Math.sin(this.player.runCycle) * 0.12 : -0.16;
+    const sprite = this.getPlayerSprite();
+    if (sprite) {
+      ctx.drawImage(sprite, x - 16, y - 22, this.player.width + 34, this.player.height + 34);
+    }
+  }
 
-    ctx.save();
-    ctx.translate(x, bodyY);
-
-    ctx.fillStyle = "#214d9b";
-    ctx.fillRect(this.player.width * 0.29, this.player.height * 0.52, torsoW, torsoH);
-
-    ctx.fillStyle = "#ffdcbf";
-    ctx.beginPath();
-    ctx.arc(this.player.width * 0.52, this.player.height * 0.22, headR, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#f1b02d";
-    ctx.beginPath();
-    ctx.ellipse(this.player.width * 0.5, this.player.height * 0.14, this.player.width * 0.22, this.player.height * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(this.player.width * 0.34, this.player.height * 0.11, this.player.width * 0.34, this.player.height * 0.09);
-
-    ctx.fillStyle = "#f57f58";
-    this.fillRoundRect(
-      ctx,
-      this.player.width * 0.18,
-      this.player.height * 0.36,
-      this.player.width * 0.64,
-      this.player.height * 0.18,
-      16,
-      "#f57f58"
-    );
-
-    ctx.strokeStyle = "#20406b";
-    ctx.lineWidth = 8;
-    const stride = this.player.onGround ? Math.sin(this.player.runCycle) * 11 : 3;
-    ctx.beginPath();
-    ctx.moveTo(this.player.width * 0.36, this.player.height * 0.56);
-    ctx.lineTo(this.player.width * 0.28, this.player.height * 0.82 + stride * 0.2);
-    ctx.moveTo(this.player.width * 0.62, this.player.height * 0.56);
-    ctx.lineTo(this.player.width * 0.72, this.player.height * 0.82 - stride * 0.2);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#f9b074";
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(this.player.width * 0.3, this.player.height * 0.42);
-    ctx.lineTo(this.player.width * 0.14, this.player.height * (0.49 + facingTilt));
-    ctx.moveTo(this.player.width * 0.7, this.player.height * 0.42);
-    ctx.lineTo(this.player.width * 0.9, this.player.height * 0.51);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#f3c64d";
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(this.player.width * 0.25, this.player.height * 0.88);
-    ctx.lineTo(this.player.width * 0.4, this.player.height * 0.88);
-    ctx.moveTo(this.player.width * 0.6, this.player.height * 0.88);
-    ctx.lineTo(this.player.width * 0.76, this.player.height * 0.88);
-    ctx.stroke();
-
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(this.player.width * 0.47, this.player.height * 0.2, 3.4, 0, Math.PI * 2);
-    ctx.arc(this.player.width * 0.58, this.player.height * 0.2, 3.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#333a63";
-    ctx.beginPath();
-    ctx.arc(this.player.width * 0.47, this.player.height * 0.2, 1.5, 0, Math.PI * 2);
-    ctx.arc(this.player.width * 0.58, this.player.height * 0.2, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
+  getPlayerSprite() {
+    if (!this.assets.ready) {
+      return null;
+    }
+    if (!this.player.onGround) {
+      return this.player.vy < 0
+        ? this.assets.getImage("characters.heroJump")
+        : this.assets.getImage("characters.heroFall") ?? this.assets.getImage("characters.heroLand");
+    }
+    const frames = this.assets.getFrames("characters.heroRunFrames");
+    if (frames.length > 0) {
+      return frames[Math.floor(this.player.runCycle) % frames.length];
+    }
+    return this.assets.getImage("characters.heroIdle");
   }
 
   drawEnemies(ctx) {
+    const walkFrames = this.assets.getFrames("enemies.mushroomWalkFrames");
     for (const enemy of this.enemies) {
       if (!enemy.alive) {
         continue;
@@ -644,47 +589,10 @@ export class Game {
       if (x + enemy.width < -40 || x > VIEWPORT_WIDTH + 40) {
         continue;
       }
-
-      const sway = Math.sin(enemy.walkCycle) * 2;
-      ctx.save();
-      ctx.translate(x, enemy.y + sway);
-
-      ctx.fillStyle = "#a27ce5";
-      ctx.beginPath();
-      ctx.arc(enemy.width * 0.5, enemy.height * 0.46, enemy.width * 0.34, Math.PI, Math.PI * 2);
-      ctx.lineTo(enemy.width * 0.82, enemy.height * 0.72);
-      ctx.quadraticCurveTo(enemy.width * 0.76, enemy.height * 0.9, enemy.width * 0.6, enemy.height * 0.92);
-      ctx.lineTo(enemy.width * 0.4, enemy.height * 0.92);
-      ctx.quadraticCurveTo(enemy.width * 0.24, enemy.height * 0.9, enemy.width * 0.18, enemy.height * 0.72);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = "#f8d9a7";
-      ctx.beginPath();
-      ctx.ellipse(enemy.width * 0.5, enemy.height * 0.64, enemy.width * 0.28, enemy.height * 0.22, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(enemy.width * 0.42, enemy.height * 0.58, 5, 0, Math.PI * 2);
-      ctx.arc(enemy.width * 0.58, enemy.height * 0.58, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#40516f";
-      ctx.beginPath();
-      ctx.arc(enemy.width * 0.42, enemy.height * 0.58, 2, 0, Math.PI * 2);
-      ctx.arc(enemy.width * 0.58, enemy.height * 0.58, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#6b4aa9";
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(enemy.width * 0.3, enemy.height * 0.92);
-      ctx.lineTo(enemy.width * 0.24, enemy.height * 1.04);
-      ctx.moveTo(enemy.width * 0.7, enemy.height * 0.92);
-      ctx.lineTo(enemy.width * 0.76, enemy.height * 1.04);
-      ctx.stroke();
-
-      ctx.restore();
+      if (walkFrames.length > 0) {
+        const sprite = walkFrames[Math.floor(enemy.walkCycle) % walkFrames.length];
+        ctx.drawImage(sprite, x - 12, enemy.y - 10, enemy.width + 24, enemy.height + 24);
+      }
     }
   }
 
@@ -705,91 +613,6 @@ export class Game {
       ctx.lineTo(x - projectile.radius + 2, projectile.y);
       ctx.stroke();
     }
-  }
-
-  drawModeBanner(ctx) {
-    if (this.mode === "play") {
-      return;
-    }
-
-    const copy = OVERLAY_COPY[this.mode];
-    ctx.save();
-    ctx.fillStyle = "rgba(255, 250, 240, 0.38)";
-    ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-
-    const cardX = 116;
-    const cardY = 74;
-    const cardW = 728;
-    const cardH = 280;
-
-    this.fillCloudCard(ctx, cardX, cardY, cardW, cardH);
-    this.fillRoundRect(ctx, cardX + 216, cardY + 28, 296, 52, 24, "#ffe992");
-
-    ctx.fillStyle = "#8f6400";
-    ctx.font = "900 22px Comic Sans MS";
-    ctx.textAlign = "center";
-    ctx.fillText(copy.badge, VIEWPORT_WIDTH / 2, cardY + 62);
-
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#ffffff";
-    ctx.fillStyle = "#4a394f";
-    ctx.font = "900 46px Comic Sans MS";
-    ctx.strokeText(copy.title, VIEWPORT_WIDTH / 2, cardY + 132);
-    ctx.fillText(copy.title, VIEWPORT_WIDTH / 2, cardY + 132);
-
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.fillStyle = "#6d5c74";
-    ctx.font = "900 24px Comic Sans MS";
-    ctx.strokeText(copy.text, VIEWPORT_WIDTH / 2, cardY + 188);
-    ctx.fillText(copy.text, VIEWPORT_WIDTH / 2, cardY + 188);
-
-    this.fillRoundRect(ctx, cardX + 206, cardY + 210, 316, 60, 28, "#f8a34f");
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = "#ffffff";
-    ctx.fillStyle = "#fff8ef";
-    ctx.font = "900 28px Comic Sans MS";
-    ctx.strokeText(copy.button, VIEWPORT_WIDTH / 2, cardY + 251);
-    ctx.fillText(copy.button, VIEWPORT_WIDTH / 2, cardY + 251);
-    ctx.restore();
-  }
-
-  fillCloudCard(ctx, x, y, width, height) {
-    ctx.save();
-    ctx.fillStyle = "rgba(255, 250, 242, 0.97)";
-    this.fillRoundRect(ctx, x, y + 18, width, height - 18, 32, "rgba(255, 250, 242, 0.97)");
-    const puffs = [
-      [x + 70, y + 30, 38],
-      [x + 160, y + 12, 48],
-      [x + 282, y + 4, 56],
-      [x + 430, y + 8, 54],
-      [x + 560, y + 20, 44],
-      [x + 660, y + 36, 34]
-    ];
-    for (const [cx, cy, r] of puffs) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  fillRoundRect(ctx, x, y, width, height, radius, fillStyle) {
-    ctx.save();
-    ctx.fillStyle = fillStyle;
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
   }
 
   toggleFullscreen() {

@@ -102,6 +102,112 @@ function buildGroundSegments(pits, worldLength) {
   return segments;
 }
 
+function overlapsRange(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
+function overlapsWithPadding(startA, endA, startB, endB, padding) {
+  return startA < endB + padding && endA > startB - padding;
+}
+
+function canPlacePit(start, width, sectionStart, sectionEnd, platforms, pits) {
+  const end = start + width;
+  if (start < sectionStart + 92 || end > sectionEnd - 92) {
+    return false;
+  }
+  for (const pit of pits) {
+    if (overlapsWithPadding(start, end, pit.start, pit.end, 96)) {
+      return false;
+    }
+  }
+  for (const platform of platforms) {
+    if (overlapsWithPadding(start, end, platform.x, platform.x + platform.width, 92)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findSafePitRange(preferredStart, width, sectionStart, sectionEnd, platforms, pits) {
+  const offsets = [0, -140, 140, -280, 280, -420, 420];
+  for (const offset of offsets) {
+    const candidateStart = preferredStart + offset;
+    if (canPlacePit(candidateStart, width, sectionStart, sectionEnd, platforms, pits)) {
+      return {
+        start: candidateStart,
+        end: candidateStart + width
+      };
+    }
+  }
+  return null;
+}
+
+function canPlacePlatform(x, width, sectionStart, sectionEnd, platforms, pits) {
+  const end = x + width;
+  if (x < sectionStart + 72 || end > sectionEnd - 72) {
+    return false;
+  }
+  for (const platform of platforms) {
+    if (overlapsWithPadding(x, end, platform.x, platform.x + platform.width, 54)) {
+      return false;
+    }
+  }
+  for (const pit of pits) {
+    if (overlapsWithPadding(x, end, pit.start, pit.end, 84)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findSafePlatformX(preferredX, width, sectionStart, sectionEnd, platforms, pits) {
+  const offsets = [0, -120, 120, -240, 240, -360, 360];
+  for (const offset of offsets) {
+    const candidateX = preferredX + offset;
+    if (canPlacePlatform(candidateX, width, sectionStart, sectionEnd, platforms, pits)) {
+      return candidateX;
+    }
+  }
+  return null;
+}
+
+function isGroundEnemySpotSafe(x, patrol, sectionStart, sectionEnd, platforms, pits, enemies) {
+  const left = x - patrol / 2 - ENEMY_WIDTH * 0.8;
+  const right = x + patrol / 2 + ENEMY_WIDTH * 0.8;
+  if (left < sectionStart + 70 || right > sectionEnd - 70) {
+    return false;
+  }
+  for (const platform of platforms) {
+    if (overlapsRange(left, right, platform.x - 36, platform.x + platform.width + 36)) {
+      return false;
+    }
+  }
+  for (const pit of pits) {
+    if (overlapsRange(left, right, pit.start - 46, pit.end + 46)) {
+      return false;
+    }
+  }
+  for (const enemy of enemies) {
+    const enemyLeft = enemy.minX - ENEMY_WIDTH * 0.5;
+    const enemyRight = enemy.maxX + ENEMY_WIDTH * 1.5;
+    if (overlapsRange(left, right, enemyLeft, enemyRight)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findSafeGroundEnemyX(preferredX, patrol, sectionStart, sectionEnd, platforms, pits, enemies) {
+  const offsets = [0, -180, 180, -320, 320, -460, 460];
+  for (const offset of offsets) {
+    const candidate = preferredX + offset;
+    if (isGroundEnemySpotSafe(candidate, patrol, sectionStart, sectionEnd, platforms, pits, enemies)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function createLevel() {
   const platforms = [
     { x: 260, y: 370, width: Math.round(120 * SCALE), height: Math.round(50 * SCALE) },
@@ -119,26 +225,65 @@ export function createLevel() {
     const band = Math.floor(i / templates.length);
     const pitBonus = Math.min(16, band * 6);
     const speedBonus = Math.min(16, band * 4);
+    const sectionStart = cursor;
+    const sectionEnd = cursor + template.length;
+    const sectionPits = [];
+    const sectionPlatforms = [];
 
     for (const pit of template.pits) {
-      pits.push({
-        start: cursor + pit.x,
-        end: cursor + pit.x + pit.width + pitBonus
-      });
+      const placedPit = findSafePitRange(
+        cursor + pit.x,
+        pit.width + pitBonus,
+        sectionStart,
+        sectionEnd,
+        platforms,
+        pits
+      );
+      if (!placedPit) {
+        continue;
+      }
+      pits.push(placedPit);
+      sectionPits.push(placedPit);
     }
 
     for (const platform of template.platforms) {
-      platforms.push({
-        x: cursor + platform.x,
+      const platformWidth = Math.round(platform.width * SCALE);
+      const platformX = findSafePlatformX(
+        cursor + platform.x,
+        platformWidth,
+        sectionStart,
+        sectionEnd,
+        platforms,
+        pits
+      );
+      if (platformX === null) {
+        continue;
+      }
+      const placedPlatform = {
+        x: platformX,
         y: platform.y,
-        width: Math.round(platform.width * SCALE),
+        width: platformWidth,
         height: Math.round(platform.height * SCALE)
-      });
+      };
+      platforms.push(placedPlatform);
+      sectionPlatforms.push(placedPlatform);
     }
 
     for (const enemy of template.enemies) {
       const topY = GROUND_Y;
-      const enemyX = cursor + enemy.x;
+      const preferredX = cursor + enemy.x;
+      const enemyX = findSafeGroundEnemyX(
+        preferredX,
+        enemy.patrol,
+        sectionStart,
+        sectionEnd,
+        sectionPlatforms,
+        sectionPits,
+        enemies
+      );
+      if (enemyX === null) {
+        continue;
+      }
       enemies.push({
         id: `enemy-${enemyId += 1}`,
         x: enemyX,

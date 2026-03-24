@@ -11,7 +11,7 @@
   --ui-top: rgba(255, 255, 255, 0.9);
   --ui-bottom: rgba(255, 245, 232, 0.92);
   --outline: #fffef8;
-  --font-cloud: "Comic Sans MS", "Chalkboard SE", "Marker Felt", "Trebuchet MS", cursive;
+  --font-cloud: "Jua", "Arial Rounded MT Bold", "Malgun Gothic", sans-serif;
 }
 
 * {
@@ -144,6 +144,45 @@ body {
   box-shadow: 0 18px 42px rgba(77, 61, 45, 0.18);
 }
 
+.overlay-kids {
+  margin: 20px auto 16px;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.overlay-kids.hidden {
+  display: none;
+}
+
+.kid-card {
+  margin: 0;
+  width: min(34vw, 260px);
+  min-width: 170px;
+  padding: 4px 4px 8px;
+  border-radius: 34px;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95), rgba(255, 248, 232, 0.15) 72%, transparent 73%);
+}
+
+.kid-card img {
+  display: block;
+  width: 100%;
+  height: 320px;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 28px rgba(106, 81, 66, 0.24));
+}
+
+.kid-card figcaption {
+  margin-top: -4px;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  color: #7b5d74;
+  font-weight: 900;
+  text-shadow:
+    -2px -2px 0 rgba(255, 255, 255, 0.95),
+    2px 2px 0 rgba(255, 255, 255, 0.95);
+}
+
 .mini-badge {
   display: inline-flex;
   align-items: center;
@@ -274,6 +313,19 @@ button:focus-visible {
 
   .hint-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overlay-kids {
+    gap: 12px;
+  }
+
+  .kid-card {
+    width: min(42vw, 210px);
+    min-width: 130px;
+  }
+
+  .kid-card img {
+    height: 230px;
   }
 
   .game-controls {

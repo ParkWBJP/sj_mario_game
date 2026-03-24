@@ -30,7 +30,12 @@ function loadImage(src) {
 }
 
 function shouldTrim(key) {
-  return key.startsWith("characters.") || key.startsWith("enemies.");
+  return (
+    key.startsWith("characters.") ||
+    key.startsWith("enemies.") ||
+    key === "backgrounds.cloudsFar" ||
+    key === "backgrounds.cloudsNear"
+  );
 }
 
 function trimImage(image) {
@@ -44,6 +49,76 @@ function trimImage(image) {
 
   ctx.drawImage(image, 0, 0);
   const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const visited = new Uint8Array(width * height);
+
+  function isBackgroundPixel(index) {
+    const alpha = data[index + 3];
+    if (alpha === 0) {
+      return true;
+    }
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const average = (red + green + blue) / 3;
+    const spread = Math.max(red, green, blue) - Math.min(red, green, blue);
+    return average > 150 && spread < 58;
+  }
+
+  const queue = [];
+  function enqueue(x, y) {
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      return;
+    }
+    const pixelIndex = y * width + x;
+    if (visited[pixelIndex]) {
+      return;
+    }
+    const dataIndex = pixelIndex * 4;
+    if (!isBackgroundPixel(dataIndex)) {
+      return;
+    }
+    visited[pixelIndex] = 1;
+    queue.push([x, y]);
+  }
+
+  for (let x = 0; x < width; x += 1) {
+    enqueue(x, 0);
+    enqueue(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 1) {
+    enqueue(0, y);
+    enqueue(width - 1, y);
+  }
+
+  while (queue.length > 0) {
+    const [x, y] = queue.shift();
+    const pixelIndex = y * width + x;
+    const dataIndex = pixelIndex * 4;
+    data[dataIndex + 3] = 0;
+    enqueue(x + 1, y);
+    enqueue(x - 1, y);
+    enqueue(x, y + 1);
+    enqueue(x, y - 1);
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const alpha = data[index + 3];
+      if (alpha === 0) {
+        continue;
+      }
+      const red = data[index];
+      const green = data[index + 1];
+      const blue = data[index + 2];
+      const average = (red + green + blue) / 3;
+      const spread = Math.max(red, green, blue) - Math.min(red, green, blue);
+      if (average > 188 && spread < 44) {
+        data[index + 3] = 0;
+      }
+    }
+  }
+
   let minX = width;
   let minY = height;
   let maxX = -1;
@@ -56,13 +131,6 @@ function trimImage(image) {
       const red = data[index];
       const green = data[index + 1];
       const blue = data[index + 2];
-      const average = (red + green + blue) / 3;
-      const spread = Math.max(red, green, blue) - Math.min(red, green, blue);
-      const nearWhiteKey = alpha > 0 && average > 188 && spread < 22;
-      if (nearWhiteKey) {
-        data[index + 3] = 0;
-        continue;
-      }
       const visible = alpha > 24 && (red < 246 || green < 246 || blue < 246);
       if (!visible) {
         continue;
@@ -88,7 +156,7 @@ function trimImage(image) {
     return image;
   }
   trimmedCtx.drawImage(
-    image,
+    canvas,
     minX,
     minY,
     trimmed.width,
